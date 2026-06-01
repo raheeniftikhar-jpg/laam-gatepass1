@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LAAM Central Gatepass</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+body{margin:0;font-family:Arial;background:#f3f5f7;color:#111827}
+.app{max-width:620px;margin:auto;padding:14px 14px 40px}
+.header{background:#101827;color:#fff;border-radius:24px;padding:22px;margin-bottom:14px}
+.header h1{margin:0;font-size:25px}.header p{color:#cbd5e1}
+.card{background:#fff;border-radius:22px;padding:16px;margin-bottom:14px;box-shadow:0 6px 18px rgba(15,23,42,.08)}
+label{font-size:13px;font-weight:700;display:block;margin-bottom:7px}
+input,select{width:100%;border:1px solid #d1d5db;border-radius:15px;padding:13px;font-size:15px;box-sizing:border-box}
+button,.fileBtn{display:block;text-align:center;border:0;border-radius:15px;padding:13px 14px;font-size:14px;font-weight:700;background:#111827;color:#fff;width:100%;box-sizing:border-box}
+button.secondary{background:#e5e7eb;color:#111827}button.danger{background:#fee2e2;color:#991b1b}button.green{background:#166534}.blue,.fileBtn{background:#1d4ed8}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}.tabs button{background:#e5e7eb;color:#111827}.tabs button.active{background:#111827;color:#fff}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#fff;border-radius:18px;padding:14px;box-shadow:0 6px 18px rgba(15,23,42,.07)}.stat small{color:#6b7280}.stat strong{display:block;font-size:22px}
+.hint{color:#6b7280;font-size:12px;margin-top:8px}.preview{width:100%;max-height:230px;object-fit:contain;border-radius:18px;background:#f3f4f6;margin-top:10px;display:none}
+.box{border:1px solid #e5e7eb;border-radius:18px;padding:12px;margin-top:9px;background:#fafafa}.box strong{display:block}.box span{display:block;color:#6b7280;font-size:12px;margin-top:3px}
+.verified{background:#ecfdf5!important;border-color:#16a34a!important}.verified strong{color:#166534}
+.mini{display:flex;justify-content:space-between;gap:8px}.mini button{width:auto;padding:8px 10px;border-radius:11px;font-size:12px;margin-left:6px}
+canvas.signature{width:100%;height:140px;border:1px solid #d1d5db;border-radius:18px;background:white;touch-action:none}.hidden{display:none!important}.pill{display:inline-block;background:#ecfdf5;color:#166534;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}.warn{display:inline-block;background:#fff7ed;color:#9a3412;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700}
+#ocrCanvas{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header"><h1>LAAM First Mile Gatepass</h1><p>Centralized reports with city-wise analytics and inbound verification.</p></div>
+<div class="tabs"><button id="homeTab" class="active">Create Gatepass</button><button id="analyticsTab">Analytics</button></div>
+
+<section id="homeView">
+<div class="card"><label>Select City</label><select id="homeCity"><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br><button id="startGatepass" class="blue">Open City Gatepass</button><div id="backendStatus" class="hint">Connecting...</div></div>
+</section>
+
+<section id="gatepassView" class="hidden">
+<div class="card"><button id="backHome" class="secondary">← Back</button><br><br><label>Selected City</label><input id="cityName" readonly><br><br><label>Brand / Vendor Name</label><input id="vendorName"><br><br><label>Picker / Rider Name</label><input id="riderName"><br><br><label>Zone</label><input id="zoneName"></div>
+<div class="card"><label>Take Close-up Picture of Article Name + SKU</label><input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none"><label for="photoInput" class="fileBtn">Take Picture</label><img id="preview" class="preview"><canvas id="ocrCanvas"></canvas><div id="scanStatus" class="hint">Take close picture. Correct fields if OCR is wrong.</div><br><label>Article Name</label><input id="articleInput"><br><br><label>SKU</label><input id="skuInput"><br><br><label>Quantity</label><input id="qtyInput" type="number" min="1" value="1"><br><br><button id="addItem" class="green">OK / Add Item</button></div>
+<div class="card"><div class="stats"><div class="stat"><small>City</small><strong id="cityStat">—</strong></div><div class="stat"><small>Articles</small><strong id="itemCount">0</strong></div><div class="stat"><small>Total Qty</small><strong id="qtyCount">0</strong></div></div></div>
+<div class="card"><label>Gatepass Preview</label><div id="gatepassPreview" class="hint">No items added yet.</div></div>
+<div class="card"><label>Vendor E-Signature</label><canvas id="vendorSignature" class="signature" width="700" height="240"></canvas><br><button id="clearVendorSignature" class="secondary">Clear Vendor Signature</button><br><label>Rider E-Signature</label><canvas id="riderSignature" class="signature" width="700" height="240"></canvas><br><button id="clearRiderSignature" class="secondary">Clear Rider Signature</button></div>
+<div class="card"><button id="submitGatepass" class="blue">Submit Gatepass & Download Copy</button><br><button id="downloadDraftPdf">Download Draft Copy</button><br><button id="resetAll" class="danger">Reset Current Gatepass</button></div>
+<div class="card"><label id="cityReportsTitle">Submitted Reports</label><div class="hint">Submitted gatepasses appear here for reference. Inbound verification is available in Analytics.</div><div id="cityReportsList" class="hint">No reports yet.</div></div>
+</section>
+
+<section id="analyticsView" class="hidden">
+<div class="card"><label>Analytics City Filter</label><select id="analyticsCity"><option value="All">All</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><div class="hint">Select a city to view date-wise submitted reports. Inbound POC verifies submitted gatepasses here.</div><br><div class="stats"><div class="stat"><small>Reports</small><strong id="dashReports">0</strong></div><div class="stat"><small>Articles</small><strong id="dashArticles">0</strong></div><div class="stat"><small>Total Qty</small><strong id="dashQty">0</strong></div></div><br><div class="row"><button id="refreshReports" class="blue">Reload Central Data</button><button id="exportCsv" class="green">Export CSV</button></div><div style="height:8px"></div><button id="hideLocalReports" class="secondary">Hide Reports on My Device Only</button><div style="height:8px"></div><button id="clearAllCentralReports" class="danger">Clear All Past Reports Permanently</button></div>
+<div class="card"><label>Date-wise Reports</label><div id="analyticsReportsList" class="hint">Select a city to view reports.</div></div>
+</section>
+</div>
+
+<script>
+const SUPABASE_URL="https://xjskbvvgsaeqcqsebrzy.supabase.co";
+const SUPABASE_KEY="sb_publishable_OJT55WMHSwI3pu62jpOtlQ_yR8cKssa";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let activeCity="Lahore",items=[],vendorSig="",riderSig="",reportsCache=[]; let localReportsHidden = localStorage.getItem("laam_hide_reports_local")==="1";
+const $=id=>document.getElementById(id);
+const safe=s=>String(s||"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function now(){return new Date().toLocaleString("en-PK",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});}
+function dateKey(d=new Date()){return d.toISOString().slice(0,10);}
+function dateLabel(k){return new Date(k+"T12:00:00").toLocaleDateString("en-PK",{weekday:"long",day:"2-digit",month:"short",year:"numeric"});}
+function shortCity(c){return c==="Lahore"?"LHR":c==="Karachi"?"KHI":c==="Faisalabad"?"FSD":"GUJ";}
+function fromDb(r){return{id:r.id,city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepassNo:r.gatepass_no,submittedAt:r.submitted_at,dateKey:r.date_key,dateLabel:r.date_label,items:r.items,totalQty:r.total_qty,vendorSig:r.vendor_sig,riderSig:r.rider_sig,verified:!!r.verified,verifiedAt:r.verified_at,verifiedBy:r.verified_by};}
+function toDb(r){return{id:r.id,city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepass_no:r.gatepassNo,submitted_at:r.submittedAt,date_key:r.dateKey,date_label:r.dateLabel,items:r.items,total_qty:r.totalQty,vendor_sig:r.vendorSig,rider_sig:r.riderSig};}
+async function fetchReports(){const {data,error}=await sb.from("gatepass_reports").select("*").order("created_at",{ascending:false});if(error){$("backendStatus").textContent="Backend error: "+error.message;reportsCache=[];}else{reportsCache=(data||[]).map(fromDb);$("backendStatus").textContent="Central reports connected.";}renderAll();}
+function cleanLine(s){return String(s||"").replace(/[|]/g,"I").replace(/[^\w\s\-()\/.]/g,"").replace(/\s+/g," ").trim();}
+function normSku(s){return String(s||"").toUpperCase().replace(/\s+/g,"").replace(/[^A-Z0-9\-_\/]/g,"");}
+function looksSku(x){const l=normSku(x);return l.length>=5&&(l.match(/-/g)||[]).length>=1&&/[A-Z]/.test(l);}
+function parseText(text){let lines=text.split(/\r?\n/).map(cleanLine).filter(x=>x&&x.length<60&&!/^[0-9]{5,}$/.test(x.replace(/\s/g,"")));let sku=normSku(lines.find(looksSku)||"");let article=lines.find(x=>!looksSku(x)&&/[A-Za-z]/.test(x))||"";return{article,sku};}
+async function readPhoto(file){if(!$("vendorName").value.trim()){alert("Please type vendor name first.");return;}$("scanStatus").textContent="Reading picture...";const img=$("preview");img.onload=async()=>{img.style.display="block";try{const result=await Tesseract.recognize(img,"eng",{tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_/(). "});const p=parseText(result.data.text||"");$("articleInput").value=p.article;$("skuInput").value=p.sku;$("scanStatus").innerHTML=(p.article&&p.sku)?'<span class="pill">Detected. Verify and press OK.</span>':'<span class="warn">OCR not confident. Correct fields and press OK.</span>';}catch(e){$("scanStatus").textContent="OCR error: "+e.message;}};img.src=URL.createObjectURL(file);}
+$("photoInput").onchange=e=>{const f=e.target.files&&e.target.files[0];if(f)readPhoto(f);e.target.value="";};
+function totalQty(){return items.reduce((s,i)=>s+Number(i.qty||0),0);}
+function updateUI(){$("cityName").value=activeCity;$("cityStat").textContent=shortCity(activeCity);$("itemCount").textContent=items.length;$("qtyCount").textContent=totalQty();$("gatepassPreview").innerHTML=items.length?items.map((it,i)=>'<div class="box"><strong>'+(i+1)+'. '+safe(it.article)+'</strong><span>SKU: '+safe(it.sku)+' · Qty: '+safe(it.qty)+'</span></div>').join(""):'<div class="hint">No items added yet.</div>';}
+function renderCityReports(){let reps=reportsCache.filter(r=>r.city===activeCity);$("cityReportsTitle").textContent=activeCity+" Submitted Reports";$("cityReportsList").innerHTML=reps.length?reps.map(cityReportCard).join(""):'<div class="hint">No reports for this city yet.</div>';}
+window.toggleDate=k=>{let el=document.getElementById("d-"+k);if(el)el.classList.toggle("hidden");};
+function renderAnalytics(){let f=$("analyticsCity").value;if(localReportsHidden){$("dashReports").textContent=0;$("dashArticles").textContent=0;$("dashQty").textContent=0;$("analyticsReportsList").innerHTML='<div class="hint">Reports hidden on this device only. Press Reload Central Data to show again.</div>';return;}if(f==="All"){$("dashReports").textContent=0;$("dashArticles").textContent=0;$("dashQty").textContent=0;$("analyticsReportsList").innerHTML='<div class="hint">Select a city to view date-wise reports.</div>';return;}let reps=reportsCache.filter(r=>r.city===f);$("dashReports").textContent=reps.length;$("dashArticles").textContent=reps.reduce((s,r)=>s+r.items.length,0);$("dashQty").textContent=reps.reduce((s,r)=>s+Number(r.totalQty||0),0);let g={};reps.forEach(r=>{let k=r.dateKey||"Unknown";(g[k]=g[k]||[]).push(r);});$("analyticsReportsList").innerHTML=Object.keys(g).length?Object.keys(g).sort().reverse().map(k=>'<div class="box" onclick="toggleDate(\''+k+'\')"><strong>'+safe(g[k][0].dateLabel||k)+'</strong><span>Reports: '+g[k].length+' · Qty: '+g[k].reduce((s,r)=>s+Number(r.totalQty||0),0)+'</span></div><div id="d-'+k+'" class="hidden">'+g[k].map(analyticsReportCard).join("")+'</div>').join(""):'<div class="hint">No reports for selected city.</div>';}
+
+
+
+
+function cityReportCard(r){let cls=r.verified?'box verified mini':'box mini';let vtxt=r.verified?'<span>✅ Verified by '+safe(r.verifiedBy||"Inbound")+' · '+safe(r.verifiedAt||"")+'</span>':'<span>Pending inbound verification</span>';return '<div class="'+cls+'"><div><strong>'+safe(r.city)+' · '+safe(r.vendor)+'</strong><span>'+safe(r.gatepassNo)+'</span><span>'+safe(r.dateLabel)+' · Qty: '+r.totalQty+'</span><span>Rider: '+safe(r.rider)+' · Zone: '+safe(r.zone||"—")+'</span>'+vtxt+'</div><div><button onclick="event.stopPropagation();downloadReportPdf(\''+r.id+'\')">PDF</button><button class="danger" onclick="event.stopPropagation();deleteReport(\''+r.id+'\')">Delete</button></div></div>';}
+function analyticsReportCard(r){let cls=r.verified?'box verified mini':'box mini';let vtxt=r.verified?'<span>✅ Verified by '+safe(r.verifiedBy||"Inbound")+' · '+safe(r.verifiedAt||"")+'</span>':'<span>Pending inbound verification</span>';let btn=r.verified?'':'<button class="green" onclick="event.stopPropagation();verifyReport(\''+r.id+'\')">✓ Verify</button>';return '<div class="'+cls+'"><div><strong>'+safe(r.city)+' · '+safe(r.vendor)+'</strong><span>'+safe(r.gatepassNo)+'</span><span>'+safe(r.dateLabel)+' · Qty: '+r.totalQty+'</span><span>Rider: '+safe(r.rider)+' · Zone: '+safe(r.zone||"—")+'</span>'+vtxt+'</div><div><button onclick="event.stopPropagation();downloadReportPdf(\''+r.id+'\')">PDF</button>'+btn+'<button class="danger" onclick="event.stopPropagation();deleteReport(\''+r.id+'\')">Delete</button></div></div>';}
+
+async function verifyReport(id){let name=prompt("Inbound POC name for verification:");if(!name)return;let time=now();let {error}=await sb.from("gatepass_reports").update({verified:true,verified_at:time,verified_by:name}).eq("id",id);if(error){alert("Verification failed. Please run the new SQL ALTER query first. Error: "+error.message);return;}alert("Gatepass verified.");await fetchReports();}
+function renderAll(){updateUI();renderCityReports();renderAnalytics();}
+
+function addItem(){
+  let article = cleanLine($("articleInput").value);
+  let sku = normSku($("skuInput").value);
+  let qty = Math.max(1, Number($("qtyInput").value || 1));
+
+  if(!article){
+    alert("Article name is required.");
+    return;
+  }
+  if(!sku){
+    alert("SKU is required.");
+    return;
+  }
+
+  let existing = items.find(i => normSku(i.sku) === sku && String(i.article).toLowerCase() === article.toLowerCase());
+
+  if(existing){
+    existing.qty = Number(existing.qty || 0) + qty;
+  }else{
+    items.push({
+      article: article,
+      sku: sku,
+      qty: qty
+    });
+  }
+
+  $("articleInput").value = "";
+  $("skuInput").value = "";
+  $("qtyInput").value = 1;
+  $("preview").style.display = "none";
+  $("scanStatus").innerHTML = '<span class="pill">Item added to gatepass. Take next picture or submit.</span>';
+
+  if(navigator.vibrate) navigator.vibrate([80,40,80]);
+
+  renderAll();
+
+  setTimeout(() => {
+    const preview = $("gatepassPreview");
+    if(preview) preview.scrollIntoView({behavior:"smooth", block:"center"});
+  }, 100);
+}
+
+$("addItem").onclick=addItem;
+function setupSig(cid,clear,setter){let c=$(cid),ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.lineWidth=3;ctx.lineCap="round";let d=false,last={x:0,y:0};function p(e){let r=c.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(c.width/r.width),y:(t.clientY-r.top)*(c.height/r.height)}}function start(e){e.preventDefault();d=true;last=p(e)}function move(e){if(!d)return;e.preventDefault();let q=p(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(q.x,q.y);ctx.stroke();last=q;setter(c.toDataURL("image/png"))}function stop(){d=false}["mousedown","touchstart"].forEach(ev=>c.addEventListener(ev,start));["mousemove","touchmove"].forEach(ev=>c.addEventListener(ev,move));["mouseup","mouseleave","touchend"].forEach(ev=>c.addEventListener(ev,stop));$(clear).onclick=()=>{ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);setter("");};}
+setupSig("vendorSignature","clearVendorSignature",v=>vendorSig=v);setupSig("riderSignature","clearRiderSignature",v=>riderSig=v);
+function payload(){let k=dateKey();return{id:Math.random().toString(36).slice(2),gatepassNo:shortCity(activeCity)+"-GP-"+Date.now(),submittedAt:now(),dateKey:k,dateLabel:dateLabel(k),city:activeCity,vendor:$("vendorName").value.trim(),rider:$("riderName").value.trim(),zone:$("zoneName").value.trim(),items:[...items],totalQty:totalQty(),vendorSig,riderSig};}
+function validate(){
+  if(!$("vendorName").value.trim())return"Vendor required.";
+  if(!items || items.length===0)return"Add items first. Please press OK / Add Item after entering article, SKU and quantity.";
+  if(!$("riderName").value.trim())return"Rider required.";
+  if(!vendorSig)return"Vendor signature required.";
+  if(!riderSig)return"Rider signature required.";
+  return"";
+}
+function makePdf(r){const {jsPDF}=window.jspdf,doc=new jsPDF();let y=16;doc.setFontSize(16);doc.text("LAAM",105,y,{align:"center"});y+=8;doc.setFontSize(14);doc.text(r.city+" First Mile Gatepass",105,y,{align:"center"});y+=10;doc.setFontSize(10);["Gatepass: "+r.gatepassNo,"Date: "+r.dateLabel,"Vendor: "+r.vendor,"Rider: "+r.rider,"Zone: "+(r.zone||"—"),"Total Qty: "+r.totalQty,"Inbound Verification: "+(r.verified?"Verified":"Pending")].forEach(t=>{doc.text(t,14,y);y+=6});r.items.forEach((it,i)=>{if(y>250){doc.addPage();y=18}doc.text((i+1)+". "+it.article+" | SKU: "+it.sku+" | Qty: "+it.qty,14,y);y+=7});if(y>195){doc.addPage();y=18}doc.text("Vendor Signature",14,y+8);doc.addImage(r.vendorSig,"PNG",14,y+14,75,26);doc.text("Rider Signature",110,y+8);doc.addImage(r.riderSig,"PNG",110,y+14,75,26);doc.save("Gatepass-"+r.city+"-"+r.gatepassNo+".pdf");}
+$("submitGatepass").onclick=async()=>{let e=validate();if(e){alert(e);return;}let r=payload();let {error}=await sb.from("gatepass_reports").insert(toDb(r));if(error){alert("Submit failed: "+error.message);return;}makePdf(r);alert("Submitted centrally.");resetForm();fetchReports();};
+$("downloadDraftPdf").onclick=()=>{let e=validate();if(e){alert(e);return;}makePdf(payload());};
+function resetForm(){items=[];$("vendorName").value="";$("riderName").value="";$("zoneName").value="";$("articleInput").value="";$("skuInput").value="";$("qtyInput").value=1;$("preview").style.display="none";$("clearVendorSignature").click();$("clearRiderSignature").click();renderAll();}
+$("resetAll").onclick=()=>{if(confirm("Reset current gatepass?"))resetForm();};
+window.downloadReportPdf=id=>{let r=reportsCache.find(x=>x.id===id);if(r)makePdf(r);};
+$("exportCsv").onclick=()=>{let f=$("analyticsCity").value;if(f==="All"){alert("Please select a city first.");return;}let reps=reportsCache.filter(r=>r.city===f);let rows=[["Date","City","Gatepass","Vendor","Rider","Zone","Article","SKU","Qty","Verified","Verified By","Verified At"]];reps.forEach(r=>r.items.forEach(i=>rows.push([r.dateLabel,r.city,r.gatepassNo,r.vendor,r.rider,r.zone,i.article,i.sku,i.qty,r.verified?"Yes":"No",r.verifiedBy||"",r.verifiedAt||""])));let csv=rows.map(row=>row.map(v=>'"'+String(v||"").replace(/"/g,'""')+'"').join(",")).join("\n");let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="LAAM-Gatepass-Reports-"+f+".csv";a.click();};
+
+async function deleteReport(id){
+  const pin = prompt("Enter admin PIN to delete this report:");
+  if(pin !== "3107"){alert("Wrong PIN. Report not deleted.");return;}
+  if(!confirm("Delete this report permanently from the central database?"))return;
+  const {error}=await sb.from("gatepass_reports").delete().eq("id",id);
+  if(error){alert("Delete failed. Run admin delete SQL once in Supabase. Error: "+error.message);return;}
+  alert("Report deleted permanently.");
+  await fetchReports();
+}
+async function clearAllCentralReports(){
+  const pin = prompt("Enter admin PIN to clear ALL reports:");
+  if(pin !== "3107"){alert("Wrong PIN. Reports not cleared.");return;}
+  if(!confirm("This will permanently delete ALL past reports for everyone. Continue?"))return;
+  const {error}=await sb.from("gatepass_reports").delete().neq("id","__never_match__");
+  if(error){alert("Clear failed. Run admin delete SQL once in Supabase. Error: "+error.message);return;}
+  alert("All past reports deleted permanently.");
+  await fetchReports();
+}
+
+$("clearAllCentralReports").onclick=clearAllCentralReports;
+$("refreshReports").onclick=()=>{localReportsHidden=false;localStorage.removeItem("laam_hide_reports_local");fetchReports();};$("hideLocalReports").onclick=()=>{localReportsHidden=true;localStorage.setItem("laam_hide_reports_local","1");renderAnalytics();};
+$("startGatepass").onclick=()=>{activeCity=$("homeCity").value;show("gatepass");renderAll();fetchReports();};
+$("backHome").onclick=()=>{show("home");};
+$("homeTab").onclick=()=>show("home");$("analyticsTab").onclick=()=>{show("analytics");fetchReports();};
+function show(v){$("homeView").classList.toggle("hidden",v!=="home");$("gatepassView").classList.toggle("hidden",v!=="gatepass");$("analyticsView").classList.toggle("hidden",v!=="analytics");$("homeTab").classList.toggle("active",v==="home"||v==="gatepass");$("analyticsTab").classList.toggle("active",v==="analytics");}
+$("analyticsCity").onchange=renderAnalytics;["vendorName","riderName","zoneName"].forEach(id=>$(id).oninput=renderAll);
+fetchReports();
+</script>
+</body></html>
