@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>LAAM First Mile</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#eef1f5;color:#111827}.app{max-width:760px;margin:0 auto;padding:14px 14px 45px}.header{background:#101827;color:#fff;border-radius:26px;padding:24px;margin-bottom:14px}.header h1{margin:0;font-size:31px}.header p{color:#cbd5e1}.card{background:#fff;border-radius:24px;padding:18px;margin-bottom:14px;box-shadow:0 8px 20px rgba(15,23,42,.08)}label{font-weight:800;display:block;margin-bottom:7px}input,select{width:100%;border:1px solid #cfd5df;border-radius:15px;padding:13px;font-size:15px}button,.fileBtn{display:block;width:100%;border:0;border-radius:16px;padding:14px;font-size:15px;font-weight:800;background:#111827;color:white;text-align:center}.blue,.fileBtn{background:#1d4ed8}.green{background:#166534}.red{background:#fee2e2!important;color:#991b1b!important}.secondary{background:#e5e7eb!important;color:#111827!important}.moduleBtn{font-size:18px;padding:18px;background:#101827}.disabled{background:#e5e7eb!important;color:#6b7280!important}.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}.tabs button{background:#e5e7eb;color:#111827}.tabs button.active{background:#111827;color:#fff}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#fff;border-radius:18px;padding:14px;box-shadow:0 6px 18px rgba(15,23,42,.07)}.stat small{color:#6b7280}.stat strong{display:block;font-size:22px}.hidden{display:none!important}.hint{color:#6b7280;font-size:13px;line-height:1.4}.preview{width:100%;max-height:240px;object-fit:contain;background:#f3f4f6;border-radius:18px;margin-top:10px;display:none}.box{border:1px solid #e5e7eb;border-radius:18px;padding:12px;margin-top:9px;background:#fafafa}.box span{display:block;color:#6b7280;font-size:12px;margin-top:3px}.pending{background:#fffbeb!important;border-color:#f59e0b!important}.verified{background:#ecfdf5!important;border-color:#16a34a!important}.rejected{background:#fef2f2!important;border-color:#ef4444!important}.pill{display:inline-block;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;margin-top:6px}.pill.pending{background:#fef3c7;color:#92400e}.pill.verified{background:#dcfce7;color:#166534}.pill.rejected{background:#fee2e2;color:#991b1b}.pill.info{background:#e0f2fe;color:#075985}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:1fr;gap:12px}.row{display:flex;gap:8px;flex-wrap:wrap}.row button{width:auto;flex:1}.reportAction{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.reportAction button{width:auto;flex:1;min-width:88px;padding:9px;font-size:12px}canvas.signature{width:100%;height:135px;border:1px solid #cfd5df;border-radius:18px;background:#fff;touch-action:none}.manualLook{border:1px solid #cbd5e1;border-radius:16px;padding:12px;background:#fff}@media(max-width:600px){.grid2{grid-template-columns:1fr}.tabs{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr 1fr}}
+</style></head><body><div class="app">
+<div class="header"><h1>LAAM First Mile</h1><p>Create gatepasses, submit for inbound verification, and correct rejected submissions.</p></div>
+
+<section id="homeView"><div class="card"><div class="grid3">
+<button id="createGatepassBtn" class="moduleBtn">Create Gatepass</button>
+<button id="fuelSheetBtn" class="moduleBtn disabled">Create Fuel Sheet</button>
+<button id="reverseGatepassBtn" class="moduleBtn disabled">Create Reverse Gatepass</button>
+</div><div id="backendStatus" class="hint">Connecting...</div></div></section>
+
+<section id="setupView" class="hidden"><div class="card">
+<button class="secondary" onclick="showView('home')">← Back</button><br><br>
+<label>Select City</label><select id="cityName"><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br>
+<label>RFP ID</label><input id="rfpId" placeholder="Enter RFP ID"><br><br><label>Brand Name</label><input id="vendorName"><br><br>
+<label>Picker Name</label><input id="pickerName"><br><br>
+<label>Zone</label><input id="zoneName"><br><br>
+<button id="setupSubmitBtn" class="blue">Submit & Continue</button>
+</div></section>
+
+<section id="gatepassView" class="hidden">
+<div class="tabs"><button id="createTab" class="active">Create</button><button id="analyticsTab">Analytics</button><button id="verifiedTab">Verified</button><button id="rejectionsTab">Rejections</button></div>
+
+<section id="createPanel">
+<div class="card"><button class="secondary" onclick="showView('setup')">← Back to Details</button><div id="currentMeta" class="hint"></div></div>
+<div class="card"><label>Gatepass Entry Type</label><select id="entryMode"><option value="article">Article wise entry</option><option value="sheet">Inventory sheet wise entry</option></select><div class="hint">Select inventory sheet wise to take box/sheet pictures and enter Qty Total.</div></div>
+
+<div id="inventorySection" class="card hidden">
+<label>Take Picture of Boxes</label><input id="boxPhotoInput" type="file" accept="image/*" capture="environment" style="display:none"><label for="boxPhotoInput" class="fileBtn">Take Box Picture</label><img id="boxPreview" class="preview"><div id="boxStatus" class="hint">No box picture selected.</div><br><button id="submitBoxPhoto" class="green">Submit Box Picture</button><div id="boxPhotoCount" class="hint">Box pictures submitted: 0</div><br>
+<label>Take Picture of Inventory Sheet</label><input id="sheetPhotoInput" type="file" accept="image/*" capture="environment" style="display:none"><label for="sheetPhotoInput" class="fileBtn">Take Inventory Sheet Picture</label><img id="sheetPreview" class="preview"><div id="sheetStatus" class="hint">No inventory sheet picture selected.</div><br><button id="submitSheetPhoto" class="green">Submit Inventory Sheet Picture</button><div id="sheetPhotoCount" class="hint">Inventory sheet pictures submitted: 0</div><br>
+<label>Qty Total</label><input id="inventoryQtyTotal" type="number" min="1" value="0"><br><br><button id="addInventoryEntry" class="green">OK / Add Inventory Sheet Entry</button>
+</div>
+
+<div id="articleSection" class="card">
+<label>Take Close-up Picture of Article Name + SKU</label><input id="photoInput" type="file" accept="image/*" capture="environment" style="display:none"><label for="photoInput" class="fileBtn">Take Picture</label><img id="preview" class="preview"><div id="scanStatus" class="hint">Take close picture. Correct fields if OCR is wrong.</div><br>
+<label>Article Name</label><input id="articleInput"><br><br><label>SKU</label><input id="skuInput"><br><br><label>Quantity</label><input id="qtyInput" type="number" min="1" value="1"><br><br><button id="addItem" class="green">OK / Add Item</button>
+</div>
+
+<div class="stats"><div class="stat"><small>City</small><strong id="cityStat">—</strong></div><div class="stat"><small>Articles</small><strong id="itemCount">0</strong></div><div class="stat"><small>Total Qty</small><strong id="qtyCount">0</strong></div></div><br>
+<div class="card"><label>Gatepass Preview</label><div id="gatepassPreview" class="manualLook"><div class="hint">No items added yet.</div></div></div>
+
+<div class="card"><div class="grid2"><div><label>Vendor POC Name</label><input id="vendorPocName"><br><label>Vendor POC Number</label><input id="vendorPocNumber"><br><label>Vendor E-Signature</label><canvas id="vendorSignature" class="signature" width="700" height="240"></canvas><button id="clearVendorSignature" class="secondary">Clear Vendor Signature</button></div><div><label>Rider Name</label><input id="riderSignName"><br><label>Rider E-Signature</label><canvas id="riderSignature" class="signature" width="700" height="240"></canvas><button id="clearRiderSignature" class="secondary">Clear Rider Signature</button></div></div></div>
+<div class="card"><button id="submitGatepass" class="blue">Submit Gatepass & Download Copy</button><br><button id="resetAll" class="red">Reset Current Gatepass</button></div>
+</section>
+
+<section id="analyticsPanel" class="hidden"><div class="card"><label>City Filter</label><select id="analyticsCity"><option value="All">All Cities</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br><button id="refreshReports" class="blue">Refresh Reports</button></div><div class="stats"><div class="stat"><small>Pending</small><strong id="pendingCount">0</strong></div><div class="stat"><small>Verified</small><strong id="verifiedCount">0</strong></div><div class="stat"><small>Rejected</small><strong id="rejectedCount">0</strong></div></div><br><div class="card"><label>Analytics Reports</label><div id="analyticsList"><div class="hint">No reports yet.</div></div></div></section>
+<section id="verifiedPanel" class="hidden"><div class="card"><label>Verified Gatepasses</label><div class="hint">Verified gatepasses appear here after inbound verification or after rider correction.</div><div id="verifiedList"><div class="hint">No verified reports.</div></div></div></section>
+<section id="rejectionsPanel" class="hidden"><div class="card"><label>Rejected Gatepasses</label><div class="hint">Select city first. Only rejected gatepasses for that city will appear here.</div><br><label>Select City</label><select id="rejectionCity"><option value="">Select City</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br><div id="rejectionList"><div class="hint">No rejected reports.</div></div></div></section>
+</section></div>
+
+<script>
+const SUPABASE_URL="https://xjskbvvgsaeqcqsebrzy.supabase.co";const SUPABASE_KEY="sb_publishable_OJT55WMHSwI3pu62jpOtlQ_yR8cKssa";const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let reportsCache=[],items=[],boxPhotos=[],sheetPhotos=[],currentBoxPhoto="",currentSheetPhoto="",vendorSig="",riderSig="",entryMode="article",editingReport=null;
+const $=id=>document.getElementById(id);
+const safe=s=>String(s||"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+function now(){return new Date().toLocaleString("en-PK",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});}
+function dateKey(d=new Date()){return d.toISOString().slice(0,10);}
+function dateLabel(k){return new Date(k+"T12:00:00").toLocaleDateString("en-PK",{weekday:"long",day:"2-digit",month:"short",year:"numeric"});}
+function cityShort(c){return c==="Lahore"?"LHR":c==="Karachi"?"KHI":c==="Faisalabad"?"FSD":"GUJ";}
+function cleanLine(s){return String(s||"").replace(/[|]/g,"I").replace(/[^\w\s\-()\/.]/g,"").replace(/\s+/g," ").trim();}
+function normSku(s){return String(s||"").toUpperCase().replace(/\s+/g,"").replace(/[^A-Z0-9\-_\/]/g,"");}
+function looksSku(x){const l=normSku(x);return l.length>=5&&(l.match(/-/g)||[]).length>=1&&/[A-Z]/.test(l);}
+function totalQty(){return items.reduce((s,i)=>s+Number(i.qty||0),0);}
+function statusOf(r){return r.status||(r.verified?"verified":"pending");}
+function fromDb(r){return{id:r.id,city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepassNo:r.gatepass_no,submittedAt:r.submitted_at,dateKey:r.date_key,dateLabel:r.date_label,items:r.items||[],totalQty:Number(r.total_qty||0),vendorSig:r.vendor_sig,riderSig:r.rider_sig,verified:!!r.verified,verifiedAt:r.verified_at,verifiedBy:r.verified_by,status:r.status||null,rejectedAt:r.rejected_at||"",rejectedBy:r.rejected_by||"",rejectionReason:r.rejection_reason||"",originalGatepassNo:r.original_gatepass_no||"",editedVersion:!!r.edited_version,vendorPocName:r.vendor_poc_name||"",vendorPocNumber:r.vendor_poc_number||"",rfpId:r.rfp_id||""};}
+function toDb(r){return{id:r.id,city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepass_no:r.gatepassNo,submitted_at:r.submittedAt,date_key:r.dateKey,date_label:r.dateLabel,items:r.items,total_qty:r.totalQty,vendor_sig:r.vendorSig,rider_sig:r.riderSig,status:r.status,verified:r.status==="verified",verified_at:r.verifiedAt||null,verified_by:r.verifiedBy||null,rejected_at:r.rejectedAt||null,rejected_by:r.rejectedBy||null,rejection_reason:r.rejectionReason||null,original_gatepass_no:r.originalGatepassNo||null,edited_version:!!r.editedVersion,vendor_poc_name:r.vendorPocName||"",vendor_poc_number:r.vendorPocNumber||"",rfp_id:r.rfpId||""};}
+async function fetchReports(){$("backendStatus").textContent="Loading central reports...";const {data,error}=await sb.from("gatepass_reports").select("*").order("created_at",{ascending:false});if(error){$("backendStatus").textContent="Backend error: "+error.message;reportsCache=[];}else{$("backendStatus").textContent="Central reports connected.";reportsCache=(data||[]).map(fromDb);}renderReports();}
+function showView(v){$("homeView").classList.toggle("hidden",v!=="home");$("setupView").classList.toggle("hidden",v!=="setup");$("gatepassView").classList.toggle("hidden",v!=="gatepass");}
+function showPanel(p){
+  $("createPanel").classList.toggle("hidden",p!=="create");
+  $("analyticsPanel").classList.toggle("hidden",p!=="analytics");
+  if($("verifiedPanel")) $("verifiedPanel").classList.toggle("hidden",p!=="verified");
+  $("rejectionsPanel").classList.toggle("hidden",p!=="rejections");
+  $("createTab").classList.toggle("active",p==="create");
+  $("analyticsTab").classList.toggle("active",p==="analytics");
+  if($("verifiedTab")) $("verifiedTab").classList.toggle("active",p==="verified");
+  $("rejectionsTab").classList.toggle("active",p==="rejections");
+  renderReports();
+}
+function setupContinue(){if(!$("rfpId").value.trim()){alert("RFP ID is required.");return;}if(!$("vendorName").value.trim()){alert("Brand Name is required.");return;}if(!$("pickerName").value.trim()){alert("Picker Name is required.");return;}if(!$("zoneName").value.trim()){alert("Zone is required.");return;}$("riderSignName").value=$("pickerName").value.trim();updateUI();showView("gatepass");showPanel("create");}
+function updateUI(){const city=$("cityName").value;$("cityStat").textContent=cityShort(city);$("itemCount").textContent=items.length;$("qtyCount").textContent=totalQty();$("currentMeta").innerHTML=`<span class="pill info">${safe(city)} · RFP: ${safe($("rfpId").value)} · ${safe($("vendorName").value)} · Picker: ${safe($("pickerName").value)} · Zone: ${safe($("zoneName").value)}</span>`;$("gatepassPreview").innerHTML=items.length?items.map((it,i)=>`<div class="box"><strong>${i+1}. ${safe(it.article)}</strong><span>SKU: ${safe(it.sku)} · Qty: ${safe(it.qty)}</span>${it.boxPhotoCount?`<span>Box Photos: ${it.boxPhotoCount} · Sheet Photos: ${it.sheetPhotoCount}</span>`:""}</div>`).join(""):'<div class="hint">No items added yet.</div>';}
+function setEntryMode(){entryMode=$("entryMode").value;$("articleSection").classList.toggle("hidden",entryMode!=="article");$("inventorySection").classList.toggle("hidden",entryMode!=="sheet");}
+function parseText(text){let lines=text.split(/\r?\n/).map(cleanLine).filter(x=>x&&x.length<60&&!/^[0-9]{5,}$/.test(x.replace(/\s/g,"")));let sku=normSku(lines.find(looksSku)||"");let article=lines.find(x=>!looksSku(x)&&/[A-Za-z]/.test(x))||"";return{article,sku};}
+async function readPhoto(file){$("scanStatus").textContent="Reading picture...";const img=$("preview");img.onload=async()=>{img.style.display="block";try{const result=await Tesseract.recognize(img,"eng",{tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_/(). "});const p=parseText(result.data.text||"");$("articleInput").value=p.article;$("skuInput").value=p.sku;$("scanStatus").innerHTML=(p.article&&p.sku)?'<span class="pill verified">Detected. Verify and press OK.</span>':'<span class="pill pending">OCR not confident. Correct fields and press OK.</span>';}catch(e){$("scanStatus").textContent="OCR error: "+e.message;}};img.src=URL.createObjectURL(file);}
+function addItem(){const article=cleanLine($("articleInput").value),sku=normSku($("skuInput").value),qty=Math.max(1,Number($("qtyInput").value||1));if(!article){alert("Article Name is required.");return;}if(!sku){alert("SKU is required.");return;}const ex=items.find(i=>normSku(i.sku)===sku&&String(i.article).toLowerCase()===article.toLowerCase());if(ex)ex.qty=Number(ex.qty||0)+qty;else items.push({article,sku,qty});$("articleInput").value="";$("skuInput").value="";$("qtyInput").value=1;$("preview").style.display="none";$("scanStatus").innerHTML='<span class="pill verified">Item added.</span>';updateUI();}
+function readDataUrl(file,cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);}
+function readBoxPhoto(file){readDataUrl(file,data=>{currentBoxPhoto=data;$("boxPreview").src=data;$("boxPreview").style.display="block";$("boxStatus").innerHTML='<span class="pill pending">Box picture ready. Press Submit Box Picture.</span>';});}
+function submitBoxPhoto(){if(!currentBoxPhoto){alert("Take box picture first.");return;}boxPhotos.push(currentBoxPhoto);currentBoxPhoto="";$("boxPreview").style.display="none";$("boxStatus").innerHTML='<span class="pill verified">Box picture submitted.</span>';$("boxPhotoCount").textContent="Box pictures submitted: "+boxPhotos.length;}
+function readSheetPhoto(file){readDataUrl(file,data=>{currentSheetPhoto=data;$("sheetPreview").src=data;$("sheetPreview").style.display="block";$("sheetStatus").innerHTML='<span class="pill pending">Sheet picture ready. Press Submit Inventory Sheet Picture.</span>';});}
+function submitSheetPhoto(){if(!currentSheetPhoto){alert("Take inventory sheet picture first.");return;}sheetPhotos.push(currentSheetPhoto);currentSheetPhoto="";$("sheetPreview").style.display="none";$("sheetStatus").innerHTML='<span class="pill verified">Inventory sheet picture submitted.</span>';$("sheetPhotoCount").textContent="Inventory sheet pictures submitted: "+sheetPhotos.length;}
+function addInventoryEntry(){const qty=Math.max(0,Number($("inventoryQtyTotal").value||0));if(boxPhotos.length===0){alert("Submit at least one box picture.");return;}if(sheetPhotos.length===0){alert("Submit at least one inventory sheet picture.");return;}if(qty<=0){alert("Enter Qty Total.");return;}const article="Inventory Sheet Wise Entry",sku="INVENTORY-SHEET";const ex=items.find(i=>i.sku===sku&&i.article===article);if(ex){ex.qty=qty;ex.boxPhotoCount=boxPhotos.length;ex.sheetPhotoCount=sheetPhotos.length;}else items.push({article,sku,qty,boxPhotoCount:boxPhotos.length,sheetPhotoCount:sheetPhotos.length});$("sheetStatus").innerHTML='<span class="pill verified">Inventory entry added to gatepass.</span>';updateUI();}
+function setupSig(canvasId,clearId,setter){const c=$(canvasId),ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.lineWidth=3;ctx.lineCap="round";let d=false,last={x:0,y:0};function p(e){const r=c.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(c.width/r.width),y:(t.clientY-r.top)*(c.height/r.height)}}function start(e){e.preventDefault();d=true;last=p(e)}function move(e){if(!d)return;e.preventDefault();const q=p(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(q.x,q.y);ctx.stroke();last=q;setter(c.toDataURL("image/png"))}function stop(){d=false}["mousedown","touchstart"].forEach(ev=>c.addEventListener(ev,start));["mousemove","touchmove"].forEach(ev=>c.addEventListener(ev,move));["mouseup","mouseleave","touchend"].forEach(ev=>c.addEventListener(ev,stop));$(clearId).onclick=()=>{ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);setter("");};}
+function validate(){if(!items.length)return entryMode==="sheet"?"Add inventory sheet entry first.":"Add items first.";if(!$("vendorPocName").value.trim())return"Vendor POC Name is required.";if(!$("vendorPocNumber").value.trim())return"Vendor POC Number is required.";if(!$("riderSignName").value.trim())return"Rider Name is required.";if(!vendorSig)return"Vendor signature required.";if(!riderSig)return"Rider signature required.";return"";}
+function buildPayload(status="pending"){const k=dateKey(),city=$("cityName").value,edited=!!editingReport;return{id:Math.random().toString(36).slice(2),gatepassNo:$("rfpId").value.trim(),submittedAt:now(),dateKey:k,dateLabel:dateLabel(k),city,rfpId:$("rfpId").value.trim(),vendor:$("vendorName").value.trim(),rider:$("riderSignName").value.trim(),zone:$("zoneName").value.trim(),items:[...items],totalQty:totalQty(),vendorSig,riderSig,status,originalGatepassNo:edited?(editingReport.originalGatepassNo||editingReport.gatepassNo):null,editedVersion:edited,vendorPocName:$("vendorPocName").value.trim(),vendorPocNumber:$("vendorPocNumber").value.trim()};}
+async function submitGatepass(){
+  const e=validate();if(e){alert(e);return;}
+
+  if(editingReport){
+    const report=buildPayload("verified");
+    report.id=editingReport.id;
+    report.gatepassNo=editingReport.gatepassNo || report.gatepassNo;
+    report.originalGatepassNo=editingReport.originalGatepassNo || editingReport.gatepassNo;
+    report.editedVersion=true;
+    report.verifiedAt=now();
+    report.verifiedBy="Edited by Rider";
+    report.rejectedAt=null;
+    report.rejectedBy=null;
+    report.rejectionReason=null;
+
+    const {error}=await sb.from("gatepass_reports").update(toDb(report)).eq("id",editingReport.id);
+    if(error){alert("Edited submission failed: "+error.message);return;}
+
+    makePdf(report);
+    alert("Edited gatepass submitted and moved to Verified.");
+    resetForm();editingReport=null;await fetchReports();showPanel("verified");
+    return;
+  }
+
+  const report=buildPayload("pending");
+  const {error}=await sb.from("gatepass_reports").insert(toDb(report));
+  if(error){alert("Submit failed: "+error.message);return;}
+  makePdf(report);alert("Gatepass submitted.");
+  resetForm();await fetchReports();showPanel("analytics");
+}
+function resetForm(){items=[];boxPhotos=[];sheetPhotos=[];currentBoxPhoto="";currentSheetPhoto="";vendorSig="";riderSig="";["articleInput","skuInput","vendorPocName","vendorPocNumber"].forEach(id=>$(id).value="");$("qtyInput").value=1;$("inventoryQtyTotal").value=0;$("preview").style.display="none";$("boxPreview").style.display="none";$("sheetPreview").style.display="none";$("boxPhotoCount").textContent="Box pictures submitted: 0";$("sheetPhotoCount").textContent="Inventory sheet pictures submitted: 0";$("clearVendorSignature").click();$("clearRiderSignature").click();updateUI();}
+function reportCard(r){const st=statusOf(r),cls=st==="verified"?"verified":st==="rejected"?"rejected":"pending",label=st==="verified"?"Verified":st==="rejected"?"Rejected":"Pending Verification";let buttons=`<button onclick="downloadReportPdf('${r.id}')">PDF</button><button class="red" onclick="deleteReport('${r.id}')">Delete</button>`;if(st==="pending")buttons+=`<button class="green" onclick="verifyReport('${r.id}')">Verify</button><button class="red" onclick="rejectReport('${r.id}')">Reject</button>`;if(st==="rejected")buttons+=`<button class="blue" onclick="editRejected('${r.id}')">Open / Edit</button>`;return`<div class="box ${cls}"><strong>${safe(r.city)} · ${safe(r.vendor)}</strong><span>Gatepass / RFP ID: ${safe(r.rfpId||r.gatepassNo||"—")}</span><span>${safe(r.gatepassNo)} ${r.editedVersion?"· Edited Version of "+safe(r.originalGatepassNo):""}</span><span>${safe(r.dateLabel)} · Qty: ${r.totalQty}</span><span>Rider: ${safe(r.rider)} · Zone: ${safe(r.zone)}</span><span class="pill ${cls}">${label}</span>${r.rejectionReason?`<span>Reason: ${safe(r.rejectionReason)}</span>`:""}<div class="reportAction">${buttons}</div></div>`;}
+function renderReports(){
+  const city=$("analyticsCity").value;
+  const list=reportsCache.filter(r=>city==="All"||r.city===city);
+  const pending=list.filter(r=>statusOf(r)==="pending");
+  const verified=list.filter(r=>statusOf(r)==="verified");
+  const rejectedAll=reportsCache.filter(r=>statusOf(r)==="rejected");
+  const rejectionCity=$("rejectionCity") ? $("rejectionCity").value : "";
+  const rejected=rejectionCity ? rejectedAll.filter(r=>r.city===rejectionCity) : [];
+
+  $("pendingCount").textContent=pending.length;
+  $("verifiedCount").textContent=verified.length;
+  $("rejectedCount").textContent=rejectedAll.length;
+
+  $("analyticsList").innerHTML=pending.length
+    ? pending.map(reportCard).join("")
+    : '<div class="hint">No pending gatepasses in analytics.</div>';
+
+  if($("verifiedList")){
+    $("verifiedList").innerHTML=verified.length
+      ? verified.map(reportCard).join("")
+      : '<div class="hint">No verified gatepasses.</div>';
+  }
+
+  if($("rejectionList")){
+    $("rejectionList").innerHTML = !rejectionCity
+      ? '<div class="hint">Select a city to view rejected gatepasses.</div>'
+      : (rejected.length ? rejected.map(reportCard).join("") : '<div class="hint">No rejected reports for selected city.</div>');
+  }
+}
+async function verifyReport(id){const name=prompt("Inbound POC name:");if(!name)return;const {error}=await sb.from("gatepass_reports").update({status:"verified",verified:true,verified_at:now(),verified_by:name}).eq("id",id);if(error){alert("Verify failed: "+error.message);return;}await fetchReports();}
+async function rejectReport(id){const name=prompt("Rejected by / Inbound POC name:");if(!name)return;const reason=prompt("Reason for rejection:");if(!reason)return;const {error}=await sb.from("gatepass_reports").update({status:"rejected",verified:false,rejected_at:now(),rejected_by:name,rejection_reason:reason}).eq("id",id);if(error){alert("Reject failed: "+error.message);return;}await fetchReports();showPanel("rejections");}
+async function deleteReport(id){const pin=prompt("Admin PIN:");if(pin!=="3107"){alert("Wrong PIN.");return;}if(!confirm("Delete this report permanently?"))return;const {error}=await sb.from("gatepass_reports").delete().eq("id",id);if(error){alert("Delete failed: "+error.message);return;}await fetchReports();}
+function editRejected(id){const r=reportsCache.find(x=>x.id===id);if(!r)return;editingReport=r;$("cityName").value=r.city;$("rfpId").value=r.rfpId||"";$("vendorName").value=r.vendor;$("pickerName").value=r.rider;$("zoneName").value=r.zone;$("riderSignName").value=r.rider;$("vendorPocName").value=r.vendorPocName||"";$("vendorPocNumber").value=r.vendorPocNumber||"";items=JSON.parse(JSON.stringify(r.items||[]));updateUI();showView("gatepass");showPanel("create");alert("Rejected gatepass opened for editing. Resubmission will show as edited version.");}
+
+function makePdf(r){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF();
+  const pageW=doc.internal.pageSize.getWidth();
+  const margin=14;
+  let y=14;
+
+  function line(yPos){doc.setDrawColor(210,215,225);doc.line(margin,yPos,pageW-margin,yPos);}
+  function addPageIfNeeded(extra=20){if(y+extra>285){doc.addPage();y=14;drawHeader(false);}}
+  function drawHeader(first=true){
+    doc.setFillColor(16,24,39);
+    doc.roundedRect(margin,10,pageW-(margin*2),28,4,4,"F");
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(17);
+    doc.setFont(undefined,"bold");
+    doc.text("LAAM First Mile Gatepass",pageW/2,22,{align:"center"});
+    doc.setFontSize(10);
+    doc.setFont(undefined,"normal");
+    doc.text("Gatepass / RFP ID: "+(r.gatepassNo||r.rfpId||"—"),pageW/2,31,{align:"center"});
+    doc.setTextColor(0,0,0);
+    y=46;
+    if(r.editedVersion){
+      doc.setFillColor(254,242,242);
+      doc.setDrawColor(239,68,68);
+      doc.roundedRect(margin,y,pageW-(margin*2),10,2,2,"FD");
+      doc.setTextColor(185,28,28);
+      doc.setFont(undefined,"bold");
+      doc.text("EDITED VERSION OF GATEPASS: "+(r.originalGatepassNo||"—"),margin+3,y+7);
+      doc.setTextColor(0,0,0);
+      y+=16;
+    }
+  }
+
+  drawHeader(true);
+
+  // Details card
+  doc.setDrawColor(203,213,225);
+  doc.setFillColor(248,250,252);
+  doc.roundedRect(margin,y,pageW-(margin*2),50,4,4,"FD");
+  doc.setFontSize(10);
+  doc.setFont(undefined,"bold");
+  doc.text("Gatepass Details",margin+4,y+8);
+  doc.setFont(undefined,"normal");
+
+  const leftX=margin+4, rightX=pageW/2+4;
+  let dy=y+17;
+  doc.text("Date: "+(r.dateLabel||"—"),leftX,dy);
+  doc.text("City: "+(r.city||"—"),rightX,dy); dy+=7;
+  doc.text("RFP ID: "+(r.rfpId||r.gatepassNo||"—"),leftX,dy);
+  doc.text("Brand: "+(r.vendor||"—"),rightX,dy); dy+=7;
+  doc.text("Picker/Rider: "+(r.rider||"—"),leftX,dy);
+  doc.text("Zone: "+(r.zone||"—"),rightX,dy); dy+=7;
+  doc.text("Vendor POC: "+(r.vendorPocName||"—"),leftX,dy);
+  doc.text("POC Number: "+(r.vendorPocNumber||"—"),rightX,dy); dy+=7;
+  doc.text("Status: "+(r.status||"pending"),leftX,dy);
+  doc.setFont(undefined,"bold");
+  doc.text("Total Qty: "+(r.totalQty||0),rightX,dy);
+  doc.setFont(undefined,"normal");
+  y+=60;
+
+  // Article table
+  doc.setFont(undefined,"bold");
+  doc.setFontSize(11);
+  doc.text("Article Details",margin,y);
+  y+=5;
+
+  const tableX=margin;
+  const colSr=10, colArticle=78, colSku=62, colQty=20;
+  const tableW=pageW-(margin*2);
+  const rowH=9;
+
+  function drawTableHeader(){
+    addPageIfNeeded(18);
+    doc.setFillColor(16,24,39);
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9);
+    doc.setFont(undefined,"bold");
+    doc.rect(tableX,y,tableW,rowH,"F");
+    doc.text("SR",tableX+2,y+6);
+    doc.text("Article Name",tableX+colSr+3,y+6);
+    doc.text("SKU",tableX+colSr+colArticle+3,y+6);
+    doc.text("Qty",tableX+colSr+colArticle+colSku+3,y+6);
+    doc.setTextColor(0,0,0);
+    y+=rowH;
+  }
+
+  drawTableHeader();
+  doc.setFont(undefined,"normal");
+  doc.setFontSize(8.5);
+
+  (r.items||[]).forEach((it,i)=>{
+    addPageIfNeeded(rowH+4);
+    const article=String(it.article||"—");
+    const sku=String(it.sku||"—");
+    const qty=String(it.qty||"0");
+    const articleLines=doc.splitTextToSize(article,colArticle-5);
+    const skuLines=doc.splitTextToSize(sku,colSku-5);
+    const lines=Math.max(articleLines.length,skuLines.length,1);
+    const h=Math.max(rowH,lines*5+4);
+
+    doc.setDrawColor(226,232,240);
+    doc.rect(tableX,y,tableW,h);
+    doc.line(tableX+colSr,y,tableX+colSr,y+h);
+    doc.line(tableX+colSr+colArticle,y,tableX+colSr+colArticle,y+h);
+    doc.line(tableX+colSr+colArticle+colSku,y,tableX+colSr+colArticle+colSku,y+h);
+
+    doc.text(String(i+1),tableX+2,y+6);
+    doc.text(articleLines,tableX+colSr+3,y+6);
+    doc.text(skuLines,tableX+colSr+colArticle+3,y+6);
+    doc.text(qty,tableX+colSr+colArticle+colSku+4,y+6);
+    y+=h;
+  });
+
+  y+=8;
+  addPageIfNeeded(55);
+
+  // Signature section
+  doc.setFont(undefined,"bold");
+  doc.setFontSize(11);
+  doc.text("Signatures",margin,y);
+  y+=6;
+
+  const sigW=80, sigH=28;
+  doc.setDrawColor(203,213,225);
+  doc.roundedRect(margin,y,82,45,3,3);
+  doc.roundedRect(pageW-margin-82,y,82,45,3,3);
+  doc.setFontSize(9);
+  doc.setFont(undefined,"bold");
+  doc.text("Vendor Signature",margin+3,y+7);
+  doc.text("Rider Signature",pageW-margin-79,y+7);
+  doc.setFont(undefined,"normal");
+  doc.text("POC: "+(r.vendorPocName||"—"),margin+3,y+39);
+  doc.text("Rider: "+(r.rider||"—"),pageW-margin-79,y+39);
+  if(r.vendorSig)doc.addImage(r.vendorSig,"PNG",margin+2,y+10,sigW,sigH);
+  if(r.riderSig)doc.addImage(r.riderSig,"PNG",pageW-margin-81,y+10,sigW,sigH);
+
+  // Footer
+  doc.setFontSize(8);
+  doc.setTextColor(100,116,139);
+  doc.text("Generated by LAAM First Mile Rider App",pageW/2,292,{align:"center"});
+  doc.setTextColor(0,0,0);
+
+  doc.save("Gatepass-RFP-"+(r.rfpId||r.gatepassNo||"NA")+".pdf");
+}
+
+window.downloadReportPdf=id=>{const r=reportsCache.find(x=>x.id===id);if(r)makePdf(r);};
+$("createGatepassBtn").onclick=()=>showView("setup");$("fuelSheetBtn").onclick=()=>alert("Create Fuel Sheet module can be added next.");$("reverseGatepassBtn").onclick=()=>alert("Create Reverse Gatepass module can be added next.");$("setupSubmitBtn").onclick=setupContinue;$("entryMode").onchange=setEntryMode;$("photoInput").onchange=e=>{const f=e.target.files&&e.target.files[0];if(f)readPhoto(f);e.target.value="";};$("addItem").onclick=addItem;$("boxPhotoInput").onchange=e=>{const f=e.target.files&&e.target.files[0];if(f)readBoxPhoto(f);e.target.value="";};$("submitBoxPhoto").onclick=submitBoxPhoto;$("sheetPhotoInput").onchange=e=>{const f=e.target.files&&e.target.files[0];if(f)readSheetPhoto(f);e.target.value="";};$("submitSheetPhoto").onclick=submitSheetPhoto;$("addInventoryEntry").onclick=addInventoryEntry;$("submitGatepass").onclick=submitGatepass;$("resetAll").onclick=()=>{if(confirm("Reset current gatepass?"))resetForm();};$("createTab").onclick=()=>showPanel("create");$("analyticsTab").onclick=()=>{showPanel("analytics");fetchReports();};$("verifiedTab").onclick=()=>{showPanel("verified");fetchReports();};$("rejectionsTab").onclick=()=>{showPanel("rejections");fetchReports();};$("analyticsCity").onchange=renderReports;if($("rejectionCity")) $("rejectionCity").onchange=renderReports;$("refreshReports").onclick=fetchReports;["rfpId","vendorName","pickerName","zoneName","cityName"].forEach(id=>$(id).addEventListener("input",updateUI));setupSig("vendorSignature","clearVendorSignature",v=>vendorSig=v);setupSig("riderSignature","clearRiderSignature",v=>riderSig=v);setEntryMode();updateUI();fetchReports();
+</script></body></html>
