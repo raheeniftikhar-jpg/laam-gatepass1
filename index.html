@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LAAM First Mile</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#eef1f5;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:16px}
+.app{max-width:760px;margin:0 auto;padding:18px}
+.header{background:#101827;color:white;border-radius:26px;padding:28px;margin-bottom:20px}
+.header h1{margin:0;font-size:36px;line-height:1.05}
+.header p{color:#cbd5e1;font-size:18px;line-height:1.35}
+.card{background:white;border-radius:24px;padding:20px;margin-bottom:18px;box-shadow:0 8px 24px rgba(15,23,42,.08)}
+.box{border:1px solid #e5e7eb;border-radius:20px;padding:16px;margin:12px 0;background:#fafafa}
+label{font-weight:800;font-size:18px;display:block;margin-bottom:8px}
+.hint{color:#6b7280;font-size:16px;line-height:1.35}
+input,select{width:100%;font-size:18px;padding:16px;border:1px solid #cfd5df;border-radius:18px;background:white}
+input[type=file]{padding:12px;background:#f8fafc}
+button,.fileBtn{display:block;width:100%;text-align:center;border:0;border-radius:18px;padding:17px;font-size:18px;font-weight:800;background:#111827;color:white;cursor:pointer;text-decoration:none}
+button.blue,.fileBtn{background:#2651dd;color:white}
+button.green{background:#15753b;color:white}
+button.red{background:#fee2e2;color:#991b1b}
+button.secondary{background:#e5e7eb;color:#111827}
+button.disabled{background:#e5e7eb;color:#6b7280;pointer-events:none}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr;gap:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:14px}
+.stat small{color:#6b7280}
+.stat strong{display:block;font-size:24px;margin-top:4px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.tabs.three{grid-template-columns:repeat(3,1fr)}
+.tabs button{background:#e5e7eb;color:#111827;font-size:15px;padding:13px}
+.tabs button.active{background:#111827;color:white}
+.hidden{display:none!important}
+.preview{display:none;width:100%;max-height:260px;object-fit:contain;margin-top:12px;border-radius:18px;background:#f3f4f6}
+.sig{width:100%;height:150px;border:1px solid #cfd5df;border-radius:18px;background:white;touch-action:none;display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-block;padding:6px 10px;border-radius:999px;font-weight:800;font-size:13px}
+.pill.pending{background:#fef3c7;color:#92400e}
+.pill.verified{background:#dcfce7;color:#166534}
+.pill.rejected{background:#fee2e2;color:#991b1b}
+.report.pending{border-color:#f59e0b;background:#fffbeb}
+.report.verified{border-color:#16a34a;background:#ecfdf5}
+.report.rejected{border-color:#ef4444;background:#fef2f2}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table th,.table td{border:1px solid #e5e7eb;padding:8px;text-align:left;vertical-align:top}
+.table th{background:#111827;color:white}
+@media(max-width:600px){.app{padding:14px}.header h1{font-size:32px}.grid2,.stats{grid-template-columns:1fr}.tabs{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <section id="homeView">
+    <div class="header">
+      <h1>LAAM First Mile</h1>
+      <p>Create gatepasses, submit for inbound verification, and correct rejected submissions.</p>
+    </div>
+    <div class="card">
+      <button id="createGatepassBtn">Create Gatepass</button><br>
+      <button id="fuelSheetBtn">Create Fuel Sheet</button><br>
+      <button class="disabled">Create Reverse Gatepass</button><br>
+      <button id="homeReportsBtn">Reports</button>
+      <div id="backendStatus" class="hint">Central reports connected.</div>
+    </div>
+  </section>
+
+  <section id="setupView" class="hidden">
+    <div class="card">
+      <button class="secondary" data-nav="home">← Back</button><br><br>
+      <label>Select City</label>
+      <select id="cityName"><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br>
+      <label>RFP ID</label><input id="rfpId" placeholder="Enter RFP ID"><br><br>
+      <label>Brand Name</label><input id="vendorName" placeholder="Brand Name"><br><br>
+      <label>Picker Name</label><input id="pickerName" placeholder="Picker / Rider Name"><br><br>
+      <label>Zone</label><input id="zoneName" placeholder="Zone"><br><br>
+      <button id="setupSubmitBtn" class="blue">Submit & Continue</button>
+    </div>
+  </section>
+
+  <section id="gatepassView" class="hidden">
+    <div class="tabs">
+      <button id="createTab" class="active">Create</button>
+      <button id="analyticsTab">Analytics</button>
+      <button id="verifiedTab">Verified</button>
+      <button id="rejectionsTab">Rejections</button>
+    </div>
+
+    <section id="createPanel">
+      <div class="card">
+        <button class="secondary" data-nav="setup">← Back</button>
+        <div id="currentMeta" class="hint"></div>
+        <br>
+        <label>Entry Type</label>
+        <select id="entryMode">
+          <option value="article">Article wise entry</option>
+          <option value="sheet">Inventory sheet wise entry</option>
+        </select>
+      </div>
+
+      <div id="articleSection" class="card">
+        <label>Article Wise Entry</label>
+        <div class="hint">Take close-up picture if needed. Correct fields manually. Maximum 15 SKUs.</div>
+        <br>
+        <label>Take Close-up Picture of Article Name + SKU</label>
+        <input id="photoInput" type="file" accept="image/*" capture="environment">
+        <img id="preview" class="preview">
+        <div id="scanStatus" class="hint">Picture optional.</div>
+        <br>
+        <label>Article Name</label><input id="articleInput"><br><br>
+        <label>SKU</label><input id="skuInput"><br><br>
+        <label>Quantity</label><input id="qtyInput" type="number" min="1" value="1"><br><br>
+        <div id="skuCounter" class="hint">SKUs Added: 0 / 15 | Total Qty: 0</div><br>
+        <button id="addItem" class="green">OK / Add Item</button>
+      </div>
+
+      <div id="inventorySection" class="card hidden">
+        <label>Inventory Sheet Wise Pickup</label>
+        <div class="hint">Two separate parts: save inventory sheet pictures first, then add Serial No / Description / Quantity details separately.</div>
+        <br>
+        <div class="box">
+          <label>Inventory Sheet Pictures</label>
+          <div class="hint">Take one sheet picture. It saves automatically after Use Photo. Repeat for more pages.</div><br>
+          <input id="inventorySheetPhotoInput" type="file" accept="image/*" capture="environment">
+          <img id="inventorySheetPreview" class="preview">
+          <div id="inventorySheetPhotoStatus" class="hint">No inventory sheet picture selected.</div>
+          <div id="inventorySheetPhotoCount" class="hint">Inventory sheet pictures saved: 0</div>
+          <div id="inventorySheetPhotoGallery" class="row"></div>
+        </div>
+
+        <div class="box">
+          <label>Inventory Details</label>
+          <div class="hint">Add as many Serial No / Description / Quantity rows as needed.</div><br>
+          <div class="grid2">
+            <div><label>Serial No.</label><input id="inventorySerialInput" type="number" min="1" value="1"></div>
+            <div><label>Quantity</label><input id="inventoryQtyInput" type="number" min="1" value="1"></div>
+          </div><br>
+          <label>Description</label><input id="inventoryDetailInput" placeholder="Enter description"><br><br>
+          <button id="addInventoryEntry" class="green">OK / Add Detail</button><br>
+          <div class="stats">
+            <div class="stat"><small>Total Lines</small><strong id="inventoryLineCount">0</strong></div>
+            <div class="stat"><small>Total Qty</small><strong id="inventoryTotalQty">0</strong></div>
+            <div class="stat"><small>Sheet Pictures</small><strong id="inventoryPhotoStat">0</strong></div>
+          </div><br>
+          <label>Details Added</label>
+          <div id="inventoryDetailsTable"><div class="hint">No inventory details added yet.</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Gatepass Preview</label>
+        <div class="stats">
+          <div class="stat"><small>City</small><strong id="cityStat">-</strong></div>
+          <div class="stat"><small>Articles</small><strong id="itemCount">0</strong></div>
+          <div class="stat"><small>Total Qty</small><strong id="qtyCount">0</strong></div>
+        </div>
+        <div id="itemsList"></div>
+      </div>
+
+      <div class="card">
+        <label>Vendor POC Name</label><input id="vendorPocName" placeholder="Vendor POC Name"><br><br>
+        <label>Vendor POC Number</label><input id="vendorPocNumber" placeholder="Phone Number"><br><br>
+        <label>Vendor E-Signature</label>
+        <canvas id="vendorSignature" class="sig"></canvas><br>
+        <button id="clearVendorSignature" class="secondary">Clear Vendor Signature</button>
+      </div>
+
+      <div class="card">
+        <label>Rider Name</label><input id="riderSignName" placeholder="Rider Name"><br><br>
+        <label>Rider E-Signature</label>
+        <canvas id="riderSignature" class="sig"></canvas><br>
+        <button id="clearRiderSignature" class="secondary">Clear Rider Signature</button>
+      </div>
+
+      <div class="card">
+        <button id="submitGatepass" class="blue">Submit Gatepass & Download Copy</button><br>
+        <button id="resetGatepass" class="red">Reset Current Gatepass</button>
+      </div>
+    </section>
+
+    <section id="analyticsPanel" class="hidden">
+      <div class="card">
+        <label>Analytics City Filter</label>
+        <select id="analyticsCity"><option>All</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br>
+        <button id="refreshReportsBtn" class="blue">Refresh</button>
+        <div id="analyticsList"></div>
+      </div>
+    </section>
+
+    <section id="verifiedPanel" class="hidden">
+      <div class="card"><label>Verified Gatepasses</label><div id="verifiedList"></div></div>
+    </section>
+
+    <section id="rejectionsPanel" class="hidden">
+      <div class="card">
+        <label>Rejected Gatepasses</label>
+        <select id="rejectionCity"><option value="">Select City</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select>
+        <div id="rejectionList"></div>
+      </div>
+    </section>
+  </section>
+
+  <section id="fuelSetupView" class="hidden">
+    <div class="card">
+      <button class="secondary" data-nav="home">← Back</button><br><br>
+      <label>Select City</label><select id="fuelCity"><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br>
+      <label>Picker Name</label><input id="fuelPickerName"><br><br>
+      <label>Zone</label><input id="fuelZone"><br><br>
+      <button id="fuelSetupNext" class="blue">Next</button>
+    </div>
+  </section>
+
+  <section id="fuelSheetView" class="hidden">
+    <div class="tabs three"><button id="fuelSubmitTab" class="active">Submit</button><button id="fuelHistoryTab">History</button><button id="fuelReportsTab">Reports</button></div>
+    <section id="fuelSubmitPanel">
+      <div class="card"><button class="secondary" data-nav="fuelSetup">← Back</button><div id="fuelMeta" class="hint"></div></div>
+      <div class="card"><label>Driver Info</label><div class="grid2">
+        <div><label>Date</label><input id="fuelDate" type="date"></div>
+        <div><label>Driver Name</label><input id="fuelDriverName"></div>
+        <div><label>Vehicle Name</label><input id="fuelVehicleName"></div>
+        <div><label>Vehicle No.</label><input id="fuelVehicleNo"></div>
+      </div></div>
+      <div class="card"><label>Meter Readings</label><div class="grid2">
+        <div><label>Day Start (km)</label><input id="fuelStartKm" type="number"></div>
+        <div><label>Day Close (km)</label><input id="fuelCloseKm" type="number"></div>
+      </div><br><div class="stats"><div class="stat"><small>Start</small><strong id="fuelStartStat">—</strong></div><div class="stat"><small>Close</small><strong id="fuelCloseStat">—</strong></div><div class="stat"><small>Total km</small><strong id="fuelTotalStat">—</strong></div></div></div>
+      <div class="card"><label>Route Stops</label><div id="fuelStopsList"></div><br><button id="addFuelStop" class="secondary">+ Add Stop</button></div>
+      <div class="card"><label>Remarks</label><input id="fuelRemarks"></div>
+      <div class="card"><button id="submitFuelSheet" class="green">✓ Submit Daily Route</button><br><button id="resetFuelSheet" class="red">Reset Fuel Sheet</button></div>
+    </section>
+    <section id="fuelHistoryPanel" class="hidden"><div class="card"><label>History</label><button id="refreshFuelHistory" class="blue">Refresh</button><div id="fuelHistoryList"></div></div></section>
+    <section id="fuelReportsPanel" class="hidden"><div class="card"><label>Reports</label><div id="fuelDriverReport"></div><br><button id="exportFuelPdf" class="green">Export Fuel PDF</button></div></section>
+  </section>
+
+  <section id="homeReportsView" class="hidden">
+    <div class="card"><button class="secondary" data-nav="home">← Back</button><br><br><label>Reports</label><div class="grid3"><button id="gatepassReportsBtn">Gatepass Reports</button><button id="fuelReportsHomeBtn">Fuel Reports</button><button class="disabled">Reverse Reports</button></div></div>
+    <div id="gatepassReportsHomeSection" class="hidden"><div class="card"><label>Gatepass Reports</label><select id="homeReportsCity"><option value="">Select City</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br><button id="homeReportsRefresh" class="blue">Refresh</button><div id="homeReportsList"></div></div></div>
+    <div id="fuelReportsHomeSection" class="hidden"><div class="card"><label>Fuel Reports</label><select id="homeFuelReportsCity"><option value="">Select City</option><option>Lahore</option><option>Karachi</option><option>Faisalabad</option><option>Gujranwala</option></select><br><br><button id="homeFuelReportsRefresh" class="blue">Refresh Fuel</button><div id="homeFuelDateReports"></div><br><button id="homeExportFuelPdf" class="green">Export Fuel PDF</button></div></div>
+  </section>
+</div>
+
+<script>
+const SUPABASE_URL = "https://xjskbvvgsaeqcqsebrzy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_OJT55WMHSwI3pu62jpOtlQ_yR8cKssa";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+const safe = v => String(v ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+const now = () => new Date().toLocaleString("en-PK");
+const todayKey = () => new Date().toISOString().slice(0,10);
+const dateLabel = () => new Date().toLocaleDateString("en-PK",{weekday:"long",day:"2-digit",month:"short",year:"numeric"});
+const cityShort = city => ({Lahore:"LHR",Karachi:"KHI",Faisalabad:"FSD",Gujranwala:"GUJ"}[city] || "CTY");
+const cleanLine = s => String(s||"").trim();
+let items=[], reportsCache=[], vendorSig="", riderSig="", editingReport=null;
+let inventorySheetPhotos=[];
+let fuelRecords=[], fuelStops=[{name:"Route Start",meter:"",google:"",fixed:true},{name:"Route End",meter:"",google:"",fixed:true}];
+
+function showView(v){
+  ["homeView","setupView","gatepassView","fuelSetupView","fuelSheetView","homeReportsView"].forEach(id=>$(id)?.classList.add("hidden"));
+  const map={home:"homeView",setup:"setupView",gatepass:"gatepassView",fuelSetup:"fuelSetupView",fuelSheet:"fuelSheetView",homeReports:"homeReportsView"};
+  $(map[v]||"homeView").classList.remove("hidden");
+  if(v==="fuelSheet"){renderFuelMeta();renderFuelStops();updateFuelStats();}
+}
+function showPanel(p){
+  ["createPanel","analyticsPanel","verifiedPanel","rejectionsPanel"].forEach(id=>$(id)?.classList.add("hidden"));
+  ["createTab","analyticsTab","verifiedTab","rejectionsTab"].forEach(id=>$(id)?.classList.remove("active"));
+  $({create:"createPanel",analytics:"analyticsPanel",verified:"verifiedPanel",rejections:"rejectionsPanel"}[p]).classList.remove("hidden");
+  $({create:"createTab",analytics:"analyticsTab",verified:"verifiedTab",rejections:"rejectionsTab"}[p]).classList.add("active");
+  renderReports();
+}
+function setupContinue(){
+  if(!$("rfpId").value.trim()) return alert("RFP ID is required.");
+  if(!$("vendorName").value.trim()) return alert("Brand Name is required.");
+  if(!$("pickerName").value.trim()) return alert("Picker Name is required.");
+  if(!$("zoneName").value.trim()) return alert("Zone is required.");
+  $("riderSignName").value=$("pickerName").value.trim();
+  showView("gatepass"); showPanel("create"); updateUI(); setEntryMode();
+}
+function totalQty(){return items.reduce((s,i)=>s+Number(i.qty||0),0)}
+function articleCount(){return items.filter(i=>i.entryType!=="inventory").length}
+function updateSkuCounter(){
+  const c=$("skuCounter"), btn=$("addItem"); if(!c) return;
+  const n=articleCount();
+  c.innerHTML=`SKUs Added: ${n} / 15 | Total Qty: ${totalQty()}`;
+  c.style.color=n>=15?"red":"";
+  if(btn) btn.disabled=n>=15;
+}
+function updateUI(){
+  $("cityStat").textContent=cityShort($("cityName").value);
+  $("itemCount").textContent=items.length;
+  $("qtyCount").textContent=totalQty();
+  $("currentMeta").innerHTML=`City: <b>${safe($("cityName").value)}</b> · RFP: <b>${safe($("rfpId").value)}</b> · Brand: <b>${safe($("vendorName").value)}</b> · Picker: <b>${safe($("pickerName").value)}</b>`;
+  $("itemsList").innerHTML=items.length?items.map((it,i)=>`<div class="box"><b>${i+1}. ${safe(it.article||it.detail)}</b><span>${it.serial?`Serial No: ${safe(it.serial)} · `:""}SKU: ${safe(it.sku||"-")} · Qty: ${safe(it.qty)}</span><button class="red" onclick="deleteItem(${i})">Delete</button></div>`).join(""):'<div class="hint">No items added yet.</div>';
+  updateSkuCounter(); renderInventoryDetailsTable(); refreshInventorySheetPhotoUi();
+}
+function deleteItem(i){items.splice(i,1);updateUI();}
+function setEntryMode(){
+  const mode=$("entryMode").value;
+  $("articleSection").classList.toggle("hidden",mode!=="article");
+  $("inventorySection").classList.toggle("hidden",mode!=="sheet");
+  updateUI();
+}
+function readFileAsData(file, cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);}
+$("photoInput").addEventListener("change",e=>{const f=e.target.files?.[0]; if(f) readFileAsData(f,d=>{$("preview").src=d;$("preview").style.display="block";$("scanStatus").innerHTML='<span class="pill verified">Picture added. Fill fields manually.</span>';});});
+function addItem(){
+  if(articleCount()>=15) return alert("Maximum 15 SKUs allowed in Article Wise Entry. Please create a new gatepass.");
+  const article=cleanLine($("articleInput").value), sku=cleanLine($("skuInput").value), qty=Math.max(1,Number($("qtyInput").value||1));
+  if(!article) return alert("Article Name is required.");
+  if(!sku) return alert("SKU is required.");
+  items.push({article,sku,qty,entryType:"article"});
+  $("articleInput").value=""; $("skuInput").value=""; $("qtyInput").value=1; updateUI();
+}
+function refreshInventorySheetPhotoUi(){
+  $("inventorySheetPhotoCount").textContent="Inventory sheet pictures saved: "+inventorySheetPhotos.length;
+  $("inventoryPhotoStat").textContent=inventorySheetPhotos.length;
+  $("inventorySheetPhotoGallery").innerHTML=inventorySheetPhotos.map((img,i)=>`<div style="width:72px;margin:3px"><img src="${img}" style="width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid #ddd"><button class="red" style="padding:5px;font-size:10px;margin-top:3px" onclick="removeInventorySheetPhoto(${i})">Remove</button></div>`).join("");
+}
+function removeInventorySheetPhoto(i){inventorySheetPhotos.splice(i,1);refreshInventorySheetPhotoUi();}
+$("inventorySheetPhotoInput").addEventListener("change",e=>{
+  const files=Array.from(e.target.files||[]);
+  if(!files.length) return;
+  $("inventorySheetPhotoStatus").innerHTML='<span class="pill pending">Saving picture...</span>';
+  files.forEach(f=>readFileAsData(f,d=>{inventorySheetPhotos.push(d);$("inventorySheetPreview").src=d;$("inventorySheetPreview").style.display="block";$("inventorySheetPhotoStatus").innerHTML='<span class="pill verified">Picture saved. Take another if needed.</span>';refreshInventorySheetPhotoUi();}));
+  setTimeout(()=>{e.target.value=""},400);
+});
+function inventoryItems(){return items.filter(i=>i.entryType==="inventory")}
+function nextInventorySerial(){return inventoryItems().reduce((m,i)=>Math.max(m,Number(i.serial||0)),0)+1}
+function renderInventoryDetailsTable(){
+  const inv=inventoryItems(), tq=inv.reduce((s,i)=>s+Number(i.qty||0),0);
+  $("inventoryLineCount").textContent=inv.length; $("inventoryTotalQty").textContent=tq;
+  $("inventoryDetailsTable").innerHTML=inv.length?inv.map((it,idx)=>`<div class="box"><b>Serial No: ${safe(it.serial)}</b><span>Description: ${safe(it.detail)}</span><span>Quantity: ${safe(it.qty)}</span><button class="red" onclick="deleteInventoryDetail(${idx})">Delete Row</button></div>`).join(""):'<div class="hint">No inventory details added yet.</div>';
+}
+function deleteInventoryDetail(idx){const it=inventoryItems()[idx]; const real=items.indexOf(it); if(real>=0)items.splice(real,1); updateUI();}
+function addInventoryEntry(){
+  const serial=cleanLine($("inventorySerialInput").value)||String(nextInventorySerial()), detail=cleanLine($("inventoryDetailInput").value), qty=Math.max(1,Number($("inventoryQtyInput").value||1));
+  if(!detail) return alert("Description is required.");
+  items.push({serial,article:detail,detail,sku:"-",qty,entryType:"inventory"});
+  $("inventorySerialInput").value=nextInventorySerial(); $("inventoryDetailInput").value=""; $("inventoryQtyInput").value=1; updateUI();
+}
+function setupSig(canvasId, clearId, target){
+  const canvas=$(canvasId), clear=$(clearId); if(!canvas)return; const ctx=canvas.getContext("2d"); let drawing=false;
+  function fit(){const r=canvas.getBoundingClientRect(),d=window.devicePixelRatio||1; canvas.width=Math.max(1,r.width*d); canvas.height=Math.max(1,r.height*d); ctx.setTransform(d,0,0,d,0,0); ctx.lineWidth=3;ctx.lineCap="round";ctx.strokeStyle="#111827";}
+  function p(e){const r=canvas.getBoundingClientRect(),t=e.touches?.[0]||e; return {x:t.clientX-r.left,y:t.clientY-r.top}}
+  function save(){const d=canvas.toDataURL("image/png"); if(target==="vendor")vendorSig=d; else riderSig=d;}
+  function start(e){e.preventDefault();fit();drawing=true;const q=p(e);ctx.beginPath();ctx.moveTo(q.x,q.y);}
+  function move(e){if(!drawing)return;e.preventDefault();const q=p(e);ctx.lineTo(q.x,q.y);ctx.stroke();save();}
+  function end(e){if(!drawing)return;if(e)e.preventDefault();drawing=false;save();}
+  canvas.style.touchAction="none"; fit(); setTimeout(fit,500);
+  ["mousedown","touchstart","pointerdown"].forEach(ev=>canvas.addEventListener(ev,start,{passive:false}));
+  ["mousemove","touchmove","pointermove"].forEach(ev=>canvas.addEventListener(ev,move,{passive:false}));
+  ["mouseup","mouseleave","touchend","pointerup","pointercancel"].forEach(ev=>canvas.addEventListener(ev,end,{passive:false}));
+  clear.onclick=()=>{fit();ctx.clearRect(0,0,canvas.width,canvas.height); if(target==="vendor")vendorSig=""; else riderSig="";};
+}
+function validateGatepass(){
+  if(!items.length) return "Add at least one item/detail first.";
+  if(!$("vendorPocName").value.trim()) return "Vendor POC Name is required.";
+  if(!$("vendorPocNumber").value.trim()) return "Vendor POC Number is required.";
+  if(!vendorSig) return "Vendor signature is required.";
+  if(!$("riderSignName").value.trim()) return "Rider name is required.";
+  if(!riderSig) return "Rider signature is required.";
+  return "";
+}
+function payload(status="pending"){
+  return {id:editingReport?.id,city:$("cityName").value,rfpId:$("rfpId").value.trim(),vendor:$("vendorName").value.trim(),rider:$("pickerName").value.trim(),zone:$("zoneName").value.trim(),gatepassNo:$("rfpId").value.trim(),submittedAt:now(),dateKey:todayKey(),dateLabel:dateLabel(),items:[...items],totalQty:totalQty(),vendorSig,riderSig,vendorPocName:$("vendorPocName").value.trim(),vendorPocNumber:$("vendorPocNumber").value.trim(),status,verified:status==="verified",inventorySheetPhotos:[...inventorySheetPhotos],editedVersion:!!editingReport,originalGatepassNo:editingReport?.gatepassNo||""};
+}
+function toDb(r){return {city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepass_no:r.gatepassNo,submitted_at:r.submittedAt,date_key:r.dateKey,date_label:r.dateLabel,items:r.items,total_qty:r.totalQty,vendor_sig:r.vendorSig,rider_sig:r.riderSig,verified:r.verified,status:r.status,rfp_id:r.rfpId,vendor_poc_name:r.vendorPocName,vendor_poc_number:r.vendorPocNumber,edited_version:r.editedVersion,original_gatepass_no:r.originalGatepassNo}}
+function fromDb(r){return {id:r.id,city:r.city,vendor:r.vendor,rider:r.rider,zone:r.zone,gatepassNo:r.gatepass_no,submittedAt:r.submitted_at,dateKey:r.date_key,dateLabel:r.date_label,items:r.items||[],totalQty:Number(r.total_qty||0),vendorSig:r.vendor_sig,riderSig:r.rider_sig,verified:!!r.verified,status:r.status||(r.verified?"verified":"pending"),rfpId:r.rfp_id||r.gatepass_no,vendorPocName:r.vendor_poc_name||"",vendorPocNumber:r.vendor_poc_number||"",rejectionReason:r.rejection_reason||"",editedVersion:!!r.edited_version,originalGatepassNo:r.original_gatepass_no||""}}
+async function submitGatepass(){
+  const err=validateGatepass(); if(err)return alert(err);
+  const r=payload(editingReport?"verified":"pending");
+  const q=editingReport?sb.from("gatepass_reports").update(toDb(r)).eq("id",editingReport.id):sb.from("gatepass_reports").insert(toDb(r));
+  const {error}=await q; if(error)return alert("Submit failed: "+error.message);
+  makePdf(r); resetGatepass(); await fetchReports(); showPanel(editingReport?"verified":"analytics");
+}
+function makePdf(r){
+  const {jsPDF}=window.jspdf; const doc=new jsPDF(); let y=14;
+  doc.setFontSize(16);doc.text("LAAM First Mile Gatepass",105,y,{align:"center"}); y+=10;
+  ["Gatepass / RFP ID: "+r.gatepassNo,"Date: "+r.dateLabel,"City: "+r.city,"Brand: "+r.vendor,"Picker/Rider: "+r.rider,"Zone: "+r.zone,"Vendor POC: "+r.vendorPocName+" / "+r.vendorPocNumber,"Status: "+r.status,"Total Qty: "+r.totalQty].forEach(t=>{doc.setFontSize(10);doc.text(t,14,y);y+=6;});
+  y+=5; doc.setFont(undefined,"bold"); doc.text("SR",14,y); doc.text("Article/Description",26,y); doc.text("SKU",120,y); doc.text("Qty",180,y); doc.setFont(undefined,"normal"); y+=6;
+  r.items.forEach((it,i)=>{if(y>270){doc.addPage();y=14};doc.text(String(it.serial||i+1),14,y);doc.text(String(it.article||it.detail||"").slice(0,45),26,y);doc.text(String(it.sku||"-").slice(0,25),120,y);doc.text(String(it.qty||0),180,y);y+=7;});
+  if(y>220){doc.addPage();y=14} y+=10; doc.text("Vendor Signature",14,y);doc.text("Rider Signature",110,y);y+=5;
+  if(r.vendorSig)doc.addImage(r.vendorSig,"PNG",14,y,75,28); if(r.riderSig)doc.addImage(r.riderSig,"PNG",110,y,75,28);
+  doc.save("Gatepass-"+r.gatepassNo+".pdf");
+}
+function resetGatepass(){
+  items=[];inventorySheetPhotos=[];vendorSig="";riderSig="";editingReport=null;
+  ["articleInput","skuInput","vendorPocName","vendorPocNumber","inventoryDetailInput"].forEach(id=>{if($(id))$(id).value=""});
+  $("qtyInput").value=1; $("inventoryQtyInput").value=1; $("inventorySerialInput").value=1;
+  ["preview","inventorySheetPreview"].forEach(id=>{$(id).style.display="none";$(id).src=""});
+  setupSig("vendorSignature","clearVendorSignature","vendor"); setupSig("riderSignature","clearRiderSignature","rider"); updateUI();
+}
+function statusOf(r){return r.status||(r.verified?"verified":"pending")}
+async function fetchReports(){const {data,error}=await sb.from("gatepass_reports").select("*").order("created_at",{ascending:false}); if(error){$("backendStatus").textContent="Backend error: "+error.message;return} reportsCache=(data||[]).map(fromDb); renderReports();}
+function reportCard(r){const st=statusOf(r);return `<div class="box report ${st}"><b>${safe(r.city)} · ${safe(r.vendor)}</b><span>RFP: ${safe(r.rfpId)} · Qty: ${safe(r.totalQty)} · ${safe(r.dateLabel)}</span><span>Status: ${safe(st)} ${r.rejectionReason? "· Reason: "+safe(r.rejectionReason):""}</span><button onclick="makePdf(reportsCache.find(x=>x.id==='${r.id}'))">PDF</button>${st==="rejected"?`<button class="blue" onclick="editRejected('${r.id}')">Open / Edit</button>`:""}</div>`}
+function renderReports(){
+  const city=$("analyticsCity")?.value||"All";
+  let list=reportsCache.filter(r=>city==="All"||r.city===city);
+  $("analyticsList").innerHTML=list.filter(r=>statusOf(r)==="pending").map(reportCard).join("")||'<div class="hint">No pending gatepasses.</div>';
+  $("verifiedList").innerHTML=list.filter(r=>statusOf(r)==="verified").map(reportCard).join("")||'<div class="hint">No verified gatepasses.</div>';
+  const rc=$("rejectionCity")?.value||""; const rej=reportsCache.filter(r=>statusOf(r)==="rejected"&&(!rc||r.city===rc));
+  $("rejectionList").innerHTML=rc?(rej.map(reportCard).join("")||'<div class="hint">No rejected gatepasses for this city.</div>'):'<div class="hint">Select city.</div>';
+}
+function editRejected(id){const r=reportsCache.find(x=>x.id===id);if(!r)return;editingReport=r; $("cityName").value=r.city;$("rfpId").value=r.rfpId;$("vendorName").value=r.vendor;$("pickerName").value=r.rider;$("zoneName").value=r.zone;items=[...(r.items||[])];showView("gatepass");showPanel("create");updateUI();}
+function showHomeReportType(t){$("gatepassReportsHomeSection").classList.toggle("hidden",t!=="gatepass");$("fuelReportsHomeSection").classList.toggle("hidden",t!=="fuel"); if(t==="gatepass"){fetchReports();renderHomeReports()} if(t==="fuel")renderHomeFuelReports();}
+function renderHomeReports(){const c=$("homeReportsCity").value;if(!c)return $("homeReportsList").innerHTML='<div class="hint">Select city.</div>'; const list=reportsCache.filter(r=>r.city===c);$("homeReportsList").innerHTML=list.map(reportCard).join("")||'<div class="hint">No reports.</div>';}
+function fuelToday(){return new Date().toISOString().slice(0,10)}
+function renderFuelMeta(){$("fuelMeta").textContent=`${$("fuelCity").value} · Picker: ${$("fuelPickerName").value} · Zone: ${$("fuelZone").value}`;}
+function fuelSetupContinue(){if(!$("fuelPickerName").value.trim())return alert("Picker Name required."); if(!$("fuelZone").value.trim())return alert("Zone required."); $("fuelDate").value=$("fuelDate").value||fuelToday();showView("fuelSheet");showFuelPanel("submit");}
+function showFuelPanel(p){["fuelSubmitPanel","fuelHistoryPanel","fuelReportsPanel"].forEach(id=>$(id).classList.add("hidden"));["fuelSubmitTab","fuelHistoryTab","fuelReportsTab"].forEach(id=>$(id).classList.remove("active")); $({submit:"fuelSubmitPanel",history:"fuelHistoryPanel",reports:"fuelReportsPanel"}[p]).classList.remove("hidden"); $({submit:"fuelSubmitTab",history:"fuelHistoryTab",reports:"fuelReportsTab"}[p]).classList.add("active"); if(p==="history")renderFuelHistory(); if(p==="reports")renderFuelReports();}
+function fuelTotalKm(){const s=Number($("fuelStartKm").value||0),c=Number($("fuelCloseKm").value||0);return c>s?c-s:0}
+function updateFuelStats(){$("fuelStartStat").textContent=$("fuelStartKm").value||"—";$("fuelCloseStat").textContent=$("fuelCloseKm").value||"—";$("fuelTotalStat").textContent=fuelTotalKm()||"—";}
+function renderFuelStops(){$("fuelStopsList").innerHTML=fuelStops.map((s,i)=>`<div class="box"><label>Stop / Brand</label><input value="${safe(s.name)}" ${s.fixed?"readonly":""} onchange="fuelStops[${i}].name=this.value"><br><label>Meter KM</label><input type="number" value="${safe(s.meter)}" onchange="fuelStops[${i}].meter=this.value"><br><label>Google KM</label><input type="number" value="${safe(s.google)}" onchange="fuelStops[${i}].google=this.value">${s.fixed?"":`<button class='red' onclick='fuelStops.splice(${i},1);renderFuelStops()'>Remove</button>`}</div>`).join("");}
+function addFuelStopRow(){fuelStops.splice(fuelStops.length-1,0,{name:"",meter:"",google:"",fixed:false});renderFuelStops();}
+function loadFuel(){try{fuelRecords=JSON.parse(localStorage.getItem("laam_fuel_records")||"[]")}catch(e){fuelRecords=[]}}
+function saveFuel(){localStorage.setItem("laam_fuel_records",JSON.stringify(fuelRecords))}
+function submitFuelSheet(){if(!$("fuelDriverName").value.trim())return alert("Driver Name required."); if(fuelTotalKm()<=0)return alert("Close KM must be higher than Start KM."); loadFuel(); fuelRecords.unshift({date:$("fuelDate").value,city:$("fuelCity").value,picker:$("fuelPickerName").value,zone:$("fuelZone").value,driver:$("fuelDriverName").value,vehicleName:$("fuelVehicleName").value,vehicleNo:$("fuelVehicleNo").value,startKm:$("fuelStartKm").value,closeKm:$("fuelCloseKm").value,totalKm:fuelTotalKm(),stops:fuelStops,remarks:$("fuelRemarks").value}); saveFuel(); alert("Fuel sheet submitted."); renderFuelHistory(); showFuelPanel("history");}
+function resetFuelSheet(){["fuelDriverName","fuelVehicleName","fuelVehicleNo","fuelStartKm","fuelCloseKm","fuelRemarks"].forEach(id=>$(id).value=""); fuelStops=[{name:"Route Start",meter:"",google:"",fixed:true},{name:"Route End",meter:"",google:"",fixed:true}];renderFuelStops();updateFuelStats();}
+function renderFuelHistory(){loadFuel();$("fuelHistoryList").innerHTML=fuelRecords.map(r=>`<div class="box"><b>${safe(r.driver)} · ${safe(r.vehicleName||r.vehicleNo)}</b><span>${safe(r.date)} · ${safe(r.city)} · ${safe(r.totalKm)} km</span></div>`).join("")||'<div class="hint">No fuel history.</div>';}
+function renderFuelReports(){loadFuel();$("fuelDriverReport").innerHTML=fuelRecords.map(r=>`<div class="box"><b>${safe(r.driver)}</b><span>${safe(r.date)} · ${safe(r.totalKm)} km</span></div>`).join("")||'<div class="hint">No fuel reports.</div>';}
+function renderHomeFuelReports(){loadFuel();const c=$("homeFuelReportsCity").value;if(!c)return $("homeFuelDateReports").innerHTML='<div class="hint">Select city.</div>';$("homeFuelDateReports").innerHTML=fuelRecords.filter(r=>r.city===c).map(r=>`<div class="box"><b>${safe(r.date)} · ${safe(r.driver)}</b><span>${safe(r.totalKm)} km</span></div>`).join("")||'<div class="hint">No fuel reports.</div>';}
+function exportFuelPdf(){loadFuel();const {jsPDF}=window.jspdf;const doc=new jsPDF();let y=14;doc.text("LAAM Fuel Report",14,y);y+=10;fuelRecords.forEach(r=>{doc.text(`${r.date} ${r.city} ${r.driver} ${r.totalKm} km`,14,y);y+=7;if(y>280){doc.addPage();y=14}});doc.save("LAAM-Fuel-Report.pdf");}
+
+function bindAll(){
+  document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showView(b.dataset.nav));
+  $("createGatepassBtn").onclick=()=>showView("setup"); $("fuelSheetBtn").onclick=()=>showView("fuelSetup"); $("homeReportsBtn").onclick=()=>showView("homeReports"); $("setupSubmitBtn").onclick=setupContinue;
+  $("createTab").onclick=()=>showPanel("create"); $("analyticsTab").onclick=()=>{showPanel("analytics");fetchReports();}; $("verifiedTab").onclick=()=>{showPanel("verified");fetchReports();}; $("rejectionsTab").onclick=()=>{showPanel("rejections");fetchReports();};
+  $("entryMode").onchange=setEntryMode; $("addItem").onclick=addItem; $("addInventoryEntry").onclick=addInventoryEntry; $("submitGatepass").onclick=submitGatepass; $("resetGatepass").onclick=()=>{if(confirm("Reset gatepass?"))resetGatepass()};
+  $("analyticsCity").onchange=renderReports; $("rejectionCity").onchange=renderReports; $("refreshReportsBtn").onclick=fetchReports;
+  $("gatepassReportsBtn").onclick=()=>showHomeReportType("gatepass"); $("fuelReportsHomeBtn").onclick=()=>showHomeReportType("fuel"); $("homeReportsCity").onchange=renderHomeReports; $("homeReportsRefresh").onclick=()=>{fetchReports();setTimeout(renderHomeReports,300)}; $("homeFuelReportsCity").onchange=renderHomeFuelReports; $("homeFuelReportsRefresh").onclick=renderHomeFuelReports; $("homeExportFuelPdf").onclick=exportFuelPdf;
+  $("fuelSetupNext").onclick=fuelSetupContinue; $("fuelSubmitTab").onclick=()=>showFuelPanel("submit"); $("fuelHistoryTab").onclick=()=>showFuelPanel("history"); $("fuelReportsTab").onclick=()=>showFuelPanel("reports"); $("fuelStartKm").oninput=updateFuelStats; $("fuelCloseKm").oninput=updateFuelStats; $("addFuelStop").onclick=addFuelStopRow; $("submitFuelSheet").onclick=submitFuelSheet; $("resetFuelSheet").onclick=()=>{if(confirm("Reset fuel sheet?"))resetFuelSheet()}; $("refreshFuelHistory").onclick=renderFuelHistory; $("exportFuelPdf").onclick=exportFuelPdf;
+  setupSig("vendorSignature","clearVendorSignature","vendor"); setupSig("riderSignature","clearRiderSignature","rider"); setEntryMode(); renderFuelStops(); updateFuelStats(); updateUI(); loadFuel(); fetchReports();
+}
+bindAll();
+</script>
+</body>
+</html>
